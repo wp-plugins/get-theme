@@ -4,7 +4,7 @@ Plugin Name: Get_Theme
 Plugin URI: http://photozero.net/get_theme
 Description: The plugin can download the ZIP formatting theme pack from http://wordpress.org/extend/themes/ or other wp themes' sites quickly, and then UNZIP it into your themes folder.
 Author: Neekey
-Version: 1.0.0
+Version: 1.1.0
 Author URI: http://photozero.net/
 */
 
