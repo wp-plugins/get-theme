@@ -251,7 +251,7 @@ function only_dir($arr){
 
 
 function display_in_dashboard(){
-	_e('<p class="youhave">One click download &amp; unzip the Wordpress Theme ZIP pack to your blog by the plugin <a href="options-general.php?page=get-theme/startpage.php"><b>Get_Theme</b></b></p>');
+	_e('<p class="youhave">One click download &amp; unzip the Wordpress Theme ZIP pack to your blog by the plugin <a href="options-general.php?page=get-theme/startpage.php"><b>Get_Theme</b></a></p>');
 }
 
 
