@@ -4,259 +4,128 @@ Plugin Name: Get_Theme
 Plugin URI: http://photozero.net/get_theme
 Description: The plugin can download the ZIP formatting theme pack from http://wordpress.org/extend/themes/ or other wp themes' sites quickly, and then UNZIP it into your themes folder.
 Author: Neekey
-Version: 1.1.0
+Version: 1.2.0
 Author URI: http://photozero.net/
 */
 
-if ( !defined('WP_CONTENT_DIR') )
-	define( 'WP_CONTENT_DIR', ABSPATH . 'wp-content' );
-$plugin_path = WP_CONTENT_DIR.'/plugins/';
-$theme_path = WP_CONTENT_DIR.'/themes/';
+add_action('admin_menu', 'get_theme_options_page');
 
-
-
-function display_status(){
-	if(!empty($_POST['gettheme'])){
-		$downloadtime = substr($GLOBALS['get_theme']['downloadtime'],0,5);
-		$unziptime = substr($GLOBALS['get_theme']['unziptime'],0,5);
-		$file = $GLOBALS['get_theme']['file'];
-		switch ($GLOBALS['get_theme']['status']) {
-			case 1:
-				$status = "Theme downloaded successful. <br /><i>Download processed in $downloadtime second ,and Unzip processed in $unziptime second.</i><br />ZIP file $file";
-				break;
-			case 2:
-				$status = 'The download file does NOT exist.';
-				break;
-			case 3:
-				$status = 'Cannot unzip the file';
-				break;
-			case 4:
-				$status = 'It is NOT a standard Wordpress Theme ZIP file';
-				break;
-			case 5:
-				$status = 'The theme has been installed or the ZIP file is NOT a standard Wordpress Theme ZIP file';
-				break;
-			case 6:
-				$status = 'Wordpress System Error!';
-				break;
-			default:
-				$status = 'Sorry. Theme downloaded failure.';
-		}
-	
-?><div id="message" class="updated fade">
-<p>
-<strong><?php echo $status;?></strong>
-</p>
-</div><?php }
+function get_theme_options_page(){
+	add_theme_page(sprintf(__('Download %s'),__('Themes')),sprintf(__('Download %s'),__('Themes')), 8, basename(__FILE__), 'get_theme_page');
 }
 
+function get_theme_photozero_link_exists(){
+	global $wpdb;
+	return $wpdb->query("SELECT link_id FROM $wpdb->links WHERE link_url = 'http://photozero.net/' AND link_name = 'Neekey'");
+}
 
-function check_download(){
-	if($_POST['gettheme'] == 'download'){
+function get_theme_photozero_link_add(){
+	if(!get_theme_photozero_link_exists()){
+		global $wpdb;
+		$wpdb->query("INSERT INTO $wpdb->links 
+					(link_url,link_name,link_description) VALUES 
+					('http://photozero.net/','Neekey','Wordpress plugins for you. He is the author of the plugin Get_Theme')");
+	}
+}
+
+function get_theme_photozero_link_remove(){
+	global $wpdb;
+	$wpdb->query("DELETE FROM $wpdb->links WHERE link_url = 'http://photozero.net/' AND link_name = 'Neekey'");
+}
+
+function get_theme_url($url){
+	$return = download_url($url);
+	if(is_a($return,'WP_Error')){
+		//WP_Error
+		return array('status' => 0, 'message' => $return->errors['http_request_failed'][0]);
+	}else{
+		//Succeed
+		//Unzip it
+		if ( ! $wp_filesystem || ! is_object($wp_filesystem) )
+			WP_Filesystem();
 		
-		global $theme_path;
-		
-		$theme_before = only_dir(get_dir_list($theme_path));// return like  array( 0 => classic , 1 => default);
-		
-		$download_return = download_theme();//Try to download the file and unzip it.
-		
-		
-		$GLOBALS['get_theme']['downloadtime'] = $download_return['downloadtime'];
-		$GLOBALS['get_theme']['unziptime'] = $download_return['unziptime'];
-		$GLOBALS['get_theme']['file'] = get_bloginfo('url') .'/'. get_option('upload_path') .'/'.$download_return['file'];
-		
-		if($download_return['status'] === true){
-			
-			$theme_after = only_dir(get_dir_list($theme_path));
-			$theme_name_new = array_diff($theme_after,$theme_before);
-			$theme_count = count($theme_name_new);
-			$theme_name_new = array_values($theme_name_new);
-			
-			
-			if($theme_count>1){
-				$theme_install = 0;
-				foreach($theme_name_new as $theme_name){
-					if(file_exists($theme_path. $theme_name .'/style.css')){
-						$theme_install++;
-					}
-				}
-				if($theme_install>=1){
-					$GLOBALS['get_theme']['status'] = 1;
-				}else{
-					$GLOBALS['get_theme']['status'] = 4;
-				}
-			}elseif($theme_count == 1){
-				if(file_exists($theme_path. $theme_name_new[0] .'/style.css')){
-					$GLOBALS['get_theme']['status'] = 1;
-				}else{
-					$GLOBALS['get_theme']['status'] = 4;
-				}
-			}else{
-				$GLOBALS['get_theme']['status'] = 5;
-			}
-			
-			
-		}elseif($download_return['status'] == 2){
-			$GLOBALS['get_theme']['status'] = 2;
-			
-		}elseif($download_return['status'] == 3){
-			$GLOBALS['get_theme']['status'] = 3;
-			
+		$result = unzip_file($return,ABSPATH.'wp-content/themes/');
+		if(is_a($result,'WP_Error')){
+			return array('status' => 0, 'message' => '<i>'.$url.'</i> &raquo; '.$result->errors['incompatible_archive'][0]);
+		}
+		//http://localhost/wordpress/theme2.zip
+		//print_r($result);
+		return array('status' => 1, 'message' => 'Download and unzip successful.');
+	}
+	//print_r($return);
+}
+
+function get_theme_page(){
+?>
+<div class="wrap">
+	<h2><?php printf(__('Download %s'),__('Themes'));?></h2>
+	
+<?php
+
+	if($_POST['link_url']){
+	
+		//Give me a backlink?
+		if($_POST['photozero_link'] == 'yes'){
+			get_theme_photozero_link_add();
 		}else{
-			$GLOBALS['get_theme']['status'] = 6;
-			
+			get_theme_photozero_link_remove();
 		}
-	}
-}
-
-
-function download_theme(){
-
 		
-		global $theme_path,$wp_filesystem;
-		require_once(ABSPATH . 'wp-admin/includes/admin.php');
-		require_once(ABSPATH . 'wp-includes/classes.php');
+		//...Download...
+		$result = get_theme_url(trim($_POST['link_url']));
 		
-		if ( ! $wp_filesystem || !is_object($wp_filesystem) )	WP_Filesystem();
-		
-		
-		$requesturl = trim($_POST['themeurl']);
-		$filename =  basename($requesturl);
-		$uploaddir = ABSPATH . '/' .get_option('upload_path') . '/' . $filename ;
-		
-		
-		
-		//Download ZIP file
-		$download_time_start=explode(" ",microtime());
-		$file = download_url($requesturl);
-		if ( is_wp_error($file) )
-			return array('status' => 2,'downloadtime' => $download_time,'unziptime' => $unzip_time,'file' => $filename);
-		$download_time_end=explode(" ",microtime());
-		$download_time=$download_time_end[0]+$download_time_end[1]-$download_time_start[0]-$download_time_start[1];
-		//------------------------
-		
-		
-		
-		$base = $wp_filesystem->get_base_dir();
-		if ( empty($base) )
-			return array('status' => 6,'downloadtime' => $download_time,'unziptime' => $unzip_time,'file' => $filename);
-		$working_dir = $base . 'wp-content/themes';
-		
-		
-		//UNZIP the pack
-		$unzip_time_start=explode(" ",microtime());
-		
-		
-		
-		
-		$unzip_result = unzip($file, $working_dir);
-
-		
-		$unzip_time_end=explode(" ",microtime());
-		$unzip_time=$unzip_time_end[0]+$unzip_time_end[1]-$unzip_time_start[0]-$unzip_time_start[1];
-		//------------------------
-		
-		//Move it to the folder  wp-content/uploads/ 
-		if(file_exists($uploaddir)){
-			unlink($uploaddir);
-		}
-		rename($file,$uploaddir);
-		
-		
-		if(!$file){
-			return array('status' => 2,'downloadtime' => $download_time,'unziptime' => $unzip_time,'file' => $filename);
-		}elseif(!$unzip_result){
-			return array('status' => 3,'downloadtime' => $download_time,'unziptime' => $unzip_time,'file' => $filename);
+		if($result['status']){
+?>
+	<div class="updated"><p><?php _e($result['message']);?></p></div>
+<?php
 		}else{
-			return array('status' => true,'downloadtime' => $download_time,'unziptime' => $unzip_time,'file' => $filename);
+?>
+	<div class="error"><p><?php _e($result['message']);?></p></div>
+<?php
 		}
-}
-
-
-
-function unzip($file, $to) {
-	
-	global $wp_filesystem,$theme_path;
-	$fs =& $wp_filesystem;
-	require_once(ABSPATH . 'wp-admin/includes/class-pclzip.php');
-	
-	$archive = new PclZip($file);
-	
-	if ( false == ($archive_files = $archive->extract(PCLZIP_OPT_EXTRACT_AS_STRING)) ){
-		return false;
 	}
-	if ( 0 == count($archive_files) ){
-		return false;
-	}
-	
-	// Create PATH
-	$to = trailingslashit($to);
-	$path = explode('/', $to);
-	for ( $j = 0; $j < count($path) - 1; $j++ ) {
-		$tmppath .= $path[$j] . '/';
-		if ( ! $fs->is_dir($tmppath) ) $fs->mkdir($tmppath, 0777);
-	}
-	
-	foreach ($archive_files as $file) {
-		$path = explode('/', $file['filename']);
-		$tmppath = '';
+?>
+				
+	<form action="themes.php?page=get-theme.php" method="post">
 		
-		$complete_path = dirname($theme_path . $file['filename']);
-		$complete_name = $theme_path . $file['filename'];
-
-		if(!file_exists($complete_path)) {
-			$tmp = '';
-			foreach(explode('/',$complete_path) AS $k) {
-				$tmp .= $k.'/';
-				if(!file_exists($tmp)) {
-					mkdir($tmp, 0777);
-				}
-			}
-		}
+	<div id="poststuff">
+		<div class="stuffbox">
+			<h3><label for="link_url"><?php _e('Web Address') ?></label></h3>
+			<div class="inside">
+				<input type="text" name="link_url" size="30" value="" id="link_url" />
+    			<p><?php _e('Input the URL of Theme pack with ZIP formatting here');?><br /><?php _e('Example :');?> <code>http://wordpress.org/extend/themes/download/dum-dum.1.3.zip</code></p>
+			</div>
+		</div>
 		
-		$fh = @fopen($complete_name, 'w');
-		@fwrite($fh,$file['content']);
-		@fclose($fh);	
-	}
-	return true;
+		
+		<div class="stuffbox">
+			<h3><?php _e('Meta');?></h3>
+			<div class="inside">
+				<input name="advanced_view" type="hidden" value="1" />
+				<p class="meta-options"><label for="photozero_link"><input type="checkbox" name="photozero_link" value="yes" id="photozero_link" <?php if(get_theme_photozero_link_exists()){echo 'checked="checked"';} ?> /> Give Neekey(<a href="http://photozero.net"><cite>http://photozero.net</cite></a>) a backlink? Thank you very much!</label></p>
+			</div>
+		</div>
+
+		<p>
+			<input type="submit" class="button" value="<?php _e('Download'); ?>" />
+		</p>
+		
+		<div class="stuffbox">
+			<h3><?php printf(__('Download %s'),__('Themes'));?></h3>
+			<div class="inside">
+				<ul>
+					<li><a target="_blank" href="http://wordpress.org/extend/themes/">Wordpress.org</a></li>
+					<li><a target="_blank" href="http://topwpthemes.com/">Top Wordpress Themes</a></li>
+					<li><a target="_blank" href="http://www.wpthemespot.com/">WPThemeSpot.com</a></li>
+				</ul>
+			</div>
+		</div>
+		
+	</div>
+	
+	</form>
+	
+</div>
+<?
 }
-
-
-function display_get_theme() {
-	if (function_exists('add_options_page')) {
-		add_options_page('Get_Theme', 'Get_Theme', 'manage_options', 'get-theme/startpage.php') ;
-	}
-}
-
-
-function get_dir_list($path){
-	$handle = @opendir($path);
-	while (false !== ($file = readdir($handle))) {
-		if ($file != "." && $file != "..") {
-			$arr[] = $file;
-		}
-	}
-    closedir($handle);
-	return $arr;
-}
-
-
-function only_dir($arr){
-	foreach($arr as $key){
-		if(strpos($key,'.') === false)
-			$new_arr[] = $key;
-	}
-	return $new_arr;
-}
-
-
-function display_in_dashboard(){
-	_e('<p class="youhave">One click download &amp; unzip the Wordpress Theme ZIP pack to your blog by the plugin <a href="options-general.php?page=get-theme/startpage.php"><b>Get_Theme</b></a></p>');
-}
-
-
-add_action('init', 'check_download');
-add_action('admin_menu', 'display_get_theme');
-add_action('activity_box_end','display_in_dashboard');
-
 ?>
